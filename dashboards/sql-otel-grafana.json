@@ -1,0 +1,1113 @@
+{
+  "title": "SQL Server Query Store & Agent (OTel)",
+  "uid": "sql-otel-azure",
+  "tags": [
+    "sql-server",
+    "query-store",
+    "sql-agent",
+    "opentelemetry"
+  ],
+  "timezone": "browser",
+  "schemaVersion": 39,
+  "version": 1,
+  "editable": true,
+  "refresh": "5m",
+  "time": {
+    "from": "now-24h",
+    "to": "now"
+  },
+  "templating": {
+    "list": [
+      {
+        "name": "ds",
+        "label": "Data source",
+        "type": "datasource",
+        "query": "grafana-azure-monitor-datasource",
+        "hide": 0,
+        "current": {}
+      },
+      {
+        "name": "db",
+        "label": "Database",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "${ds}"
+        },
+        "query": {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated > ago(30d)\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| distinct db = tostring(a.db_name)\n| where isnotempty(db)\n| order by db asc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ]
+          }
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1,
+        "hide": 0
+      },
+      {
+        "name": "job",
+        "label": "Agent job",
+        "type": "query",
+        "datasource": {
+          "type": "grafana-azure-monitor-datasource",
+          "uid": "${ds}"
+        },
+        "query": {
+          "refId": "A",
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated > ago(30d)\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| distinct job = tostring(a.job_name)\n| order by job asc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ]
+          }
+        },
+        "refresh": 2,
+        "multi": true,
+        "includeAll": true,
+        "current": {
+          "text": "All",
+          "value": "$__all"
+        },
+        "sort": 1,
+        "hide": 0
+      }
+    ]
+  },
+  "panels": [
+    {
+      "id": 1,
+      "type": "row",
+      "title": "Query Store",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 0,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Statement executions",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize value = sum(execs)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Total duration",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize value = sum(total_ms)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Total CPU",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize value = sum(total_cpu_ms)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 5,
+      "type": "stat",
+      "title": "Procedures seen",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| where object_type == 'SQL_STORED_PROCEDURE' | summarize value = dcount(object_name)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 6,
+      "type": "stat",
+      "title": "Distinct queries",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize value = dcount(strcat(db_name, ':', query_id))",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 7,
+      "type": "stat",
+      "title": "Aborted / exception executions",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 1,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| where execution_type != 'Regular' | summarize value = sum(execs)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 8,
+      "type": "timeseries",
+      "title": "Duration by procedure (top 10)",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 5,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "let base = materialize(OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| where object_name !startswith \"(\");\nlet top10 = base | summarize t = sum(total_ms) by object_name | top 10 by t | project object_name;\nbase\n| where object_name in (top10)\n| summarize duration_ms = sum(total_ms) by interval_end, object_name\n| order by interval_end asc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "time_series"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "ms"
+        },
+        "overrides": []
+      },
+      "options": {},
+      "description": "Total duration per Query Store interval for the 10 most expensive procedures."
+    },
+    {
+      "id": 9,
+      "type": "timeseries",
+      "title": "Executions by type",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 5,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize executions = sum(execs) by interval_end, execution_type\n| order by interval_end asc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "time_series"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 10,
+      "type": "table",
+      "title": "Top procedures",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 14,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| where object_name !startswith \"(\"\n| summarize ['Executions'] = sum(execs),\n            ['Total duration (ms)'] = sum(total_ms),\n            ['Avg duration (ms)'] = sum(total_ms) / sum(execs),\n            ['Total CPU (ms)'] = sum(total_cpu_ms),\n            ['Logical reads'] = sum(total_reads),\n            ['Queries'] = dcount(query_id),\n            ['Plans'] = dcount(plan_id)\n    by ['Database'] = db_name, ['Procedure'] = object_name\n| top 50 by ['Total duration (ms)']",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "description": "Statement-level stats rolled up per procedure. Executions count statements, not procedure calls."
+    },
+    {
+      "id": 11,
+      "type": "table",
+      "title": "Top queries",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 24,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize ['Executions'] = sum(execs),\n            ['Total duration (ms)'] = sum(total_ms),\n            ['Avg duration (ms)'] = sum(total_ms) / sum(execs),\n            ['Max duration (ms)'] = max(max_ms),\n            ['Total CPU (ms)'] = sum(total_cpu_ms),\n            ['Plans'] = dcount(plan_id),\n            sql = take_any(sql_text)\n    by ['Database'] = db_name, ['Query ID'] = query_id, ['Object'] = object_name\n| extend ['SQL'] = substring(sql, 0, 200)\n| project-away sql\n| top 50 by ['Total duration (ms)']",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 12,
+      "type": "table",
+      "title": "Queries with multiple plans (possible regressions)",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 34,
+        "w": 24,
+        "h": 8
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| extend db_name        = tostring(a.db_name),\n         object_name    = tostring(a.object_name),\n         object_type    = tostring(a.object_type),\n         query_id       = tolong(a.query_id),\n         plan_id        = tolong(a.plan_id),\n         interval_end   = todatetime(a.interval_end),\n         execution_type = tostring(a.execution_type_desc),\n         execs          = todouble(a.count_executions),\n         avg_ms         = todouble(a.avg_duration_ms),\n         max_ms         = todouble(a.max_duration_ms),\n         cpu_ms         = todouble(a.avg_cpu_ms),\n         reads          = todouble(a.avg_logical_io_reads),\n         sql_text       = tostring(column_ifexists(\"Body\", \"\"))\n| where isnotempty(db_name) and $__contains(db_name, $db)\n| where interval_end between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by db_name, query_id, plan_id, interval_end, execution_type\n| extend total_ms = avg_ms * execs, total_cpu_ms = cpu_ms * execs, total_reads = reads * execs\n| summarize ['Plans'] = dcount(plan_id),\n            ['Plan IDs'] = make_set(plan_id),\n            ['Avg duration (ms)'] = sum(total_ms) / sum(execs),\n            ['Worst max (ms)'] = max(max_ms),\n            sql = take_any(sql_text)\n    by ['Database'] = db_name, ['Query ID'] = query_id, ['Object'] = object_name\n| where ['Plans'] > 1\n| extend ['SQL'] = substring(sql, 0, 200)\n| project-away sql\n| order by ['Worst max (ms)'] desc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 13,
+      "type": "row",
+      "title": "SQL Agent jobs",
+      "collapsed": false,
+      "gridPos": {
+        "x": 0,
+        "y": 42,
+        "w": 24,
+        "h": 1
+      },
+      "panels": []
+    },
+    {
+      "id": 14,
+      "type": "stat",
+      "title": "Job runs",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 43,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 | summarize value = count()",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "blue"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 15,
+      "type": "stat",
+      "title": "Failed runs",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 4,
+        "y": 43,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 | summarize value = countif(run_status == 'Failed')",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 16,
+      "type": "stat",
+      "title": "Success rate",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 8,
+        "y": 43,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 | summarize value = round(100.0 * countif(run_status == 'Succeeded') / count(), 1)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "percent",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "green"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 17,
+      "type": "stat",
+      "title": "Avg job duration",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 43,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 | summarize value = avg(duration_s)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "purple"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 18,
+      "type": "stat",
+      "title": "Longest run",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 16,
+        "y": 43,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 | summarize value = max(duration_s)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "orange"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 19,
+      "type": "stat",
+      "title": "Jobs with failures",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 20,
+        "y": 43,
+        "w": 4,
+        "h": 4
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 and run_status == 'Failed' | summarize value = dcount(job_name)",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "color": {
+            "mode": "fixed",
+            "fixedColor": "red"
+          }
+        },
+        "overrides": []
+      },
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "lastNotNull"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "colorMode": "background",
+        "graphMode": "none",
+        "textMode": "value"
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Job outcomes per hour",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 47,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0\n| summarize runs = count() by bin(run_start, 1h), run_status\n| order by run_start asc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "time_series"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {
+            "drawStyle": "bars",
+            "fillOpacity": 80,
+            "stacking": {
+              "mode": "normal",
+              "group": "A"
+            },
+            "lineWidth": 1
+          }
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Average job duration per hour",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 12,
+        "y": 47,
+        "w": 12,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0 and run_status in (\"Succeeded\", \"Failed\")\n| summarize avg_duration_s = avg(duration_s) by bin(run_start, 1h), job_name\n| order by run_start asc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "time_series"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 22,
+      "type": "table",
+      "title": "Job summary",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 56,
+        "w": 24,
+        "h": 9
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where step_id == 0\n| summarize ['Runs'] = count(),\n            ['Failed'] = countif(run_status == \"Failed\"),\n            ['Success %'] = round(100.0 * countif(run_status == \"Succeeded\") / count(), 1),\n            ['Avg (s)'] = round(avg(duration_s), 1),\n            ['Max (s)'] = max(duration_s),\n            arg_max(run_start, run_status)\n    by ['Job'] = job_name, ['Category'] = job_category\n| project-rename ['Last run (UTC)'] = run_start, ['Last status'] = run_status\n| order by ['Failed'] desc, ['Runs'] desc",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {}
+    },
+    {
+      "id": 23,
+      "type": "table",
+      "title": "Recent failures and retries",
+      "datasource": {
+        "type": "grafana-azure-monitor-datasource",
+        "uid": "${ds}"
+      },
+      "gridPos": {
+        "x": 0,
+        "y": 65,
+        "w": 24,
+        "h": 10
+      },
+      "targets": [
+        {
+          "refId": "A",
+          "datasource": {
+            "type": "grafana-azure-monitor-datasource",
+            "uid": "${ds}"
+          },
+          "queryType": "Azure Log Analytics",
+          "azureLogAnalytics": {
+            "query": "OTelLogs\n| where TimeGenerated between (($__timeFrom() - 1d) .. ($__timeTo() + 1d))\n| extend a = column_ifexists(\"LogAttributes\", column_ifexists(\"Attributes\", dynamic({})))\n| where tostring(a.event_source) == \"mssql.agent\"\n| extend instance_id  = tolong(a.instance_id),\n         job_name     = tostring(a.job_name),\n         job_category = tostring(a.job_category),\n         step_id      = toint(a.step_id),\n         step_name    = tostring(a.step_name),\n         run_status   = tostring(a.run_status),\n         run_start    = todatetime(a.run_start_utc),\n         duration_s   = todouble(a.duration_s),\n         retries      = toint(a.retries_attempted),\n         message      = tostring(column_ifexists(\"Body\", \"\"))\n| where $__contains(job_name, $job)\n| where run_start between ($__timeFrom() .. $__timeTo())\n| summarize arg_max(TimeGenerated, *) by instance_id\n| where run_status in (\"Failed\", \"Retry\")\n| project ['Start (UTC)'] = run_start, ['Job'] = job_name, ['Step'] = step_name,\n          ['Status'] = run_status, ['Duration (s)'] = duration_s,\n          ['Error'] = tostring(a.sql_message_id), ['Message'] = message\n| order by ['Start (UTC)'] desc\n| take 100",
+            "resources": [
+              "/subscriptions/ee3cb3c0-3415-43ee-8e63-a0170716ee9e/resourceGroups/DefaultResourceGroup-EUS2/providers/Microsoft.OperationalInsights/workspaces/DefaultWorkspace-ee3cb3c0-3415-43ee-8e63-a0170716ee9e-EUS2"
+            ],
+            "resultFormat": "table"
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {},
+        "overrides": []
+      },
+      "options": {},
+      "description": "Step-level and job-level failures with the Agent history message."
+    }
+  ]
+}
